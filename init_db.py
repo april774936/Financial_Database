@@ -4,23 +4,23 @@ from oauth2client.service_account import ServiceAccountCredentials
 from fredapi import Fred
 
 def init_split_sheets():
-    # 1. 인증 및 API 설정
+    # 1. 인증 설정
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_json = json.loads(os.environ.get('GSPREAD_JSON'))
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
     client = gspread.authorize(creds)
     fred = Fred(api_key=os.environ.get('FRED_API_KEY'))
     
-    # [수정포인트] 시트 이름과 환경변수에 등록한 ID 매칭
+    # Secrets에 등록한 3개의 시트 ID를 가져옵니다
     sheets_info = {
-        'ASSETS': os.environ.get('SHEET_ID_ASSETS'),     # 시트 1 ID
-        'LIQUID': os.environ.get('SHEET_ID_LIQUID'),     # 시트 2 ID
-        'MACRO': os.environ.get('SHEET_ID_MACRO')       # 시트 3 ID
+        'ASSETS': os.environ.get('SHEET_ID_ASSETS'),
+        'LIQUID': os.environ.get('SHEET_ID_LIQUID'),
+        'MACRO': os.environ.get('SHEET_ID_MACRO')
     }
 
-    # 지표 분류 정의
+    # [중요] 전체 지표 분류 정의
     fred_dict = {
-        # ASSETS 그룹 (시장 지수 및 자산)
+        # --- ASSETS 시트 (자산/지수/원자재) ---
         'NASDAQ100': ['ASSETS', 'Index', '나스닥100', 1],
         'SP500': ['ASSETS', 'Index', 'S&P500', 1],
         'DJIA': ['ASSETS', 'Index', '다우존스', 1],
@@ -31,7 +31,7 @@ def init_split_sheets():
         'ID71081': ['ASSETS', 'Commodity', '은_현물', 1],
         'PCOPPUSDM': ['ASSETS', 'Commodity', '구리_현물', 1],
 
-        # LIQUID 그룹 (유동성 및 금리)
+        # --- LIQUID 시트 (유동성/금리) ---
         'WALCL': ['LIQUID', 'Liquidity', '연준총자산', 1000000],
         'M2SL': ['LIQUID', 'Money', 'M2통화량', 1000],
         'WTREGEN': ['LIQUID', 'Liquidity', 'TGA잔고', 1],
@@ -43,7 +43,7 @@ def init_split_sheets():
         'BAMLH0A0HYM2': ['LIQUID', 'Risk', '정크본드스프레드', 1],
         'VIXCLS': ['LIQUID', 'Volatility', 'VIX공포지수', 1],
 
-        # MACRO 그룹 (경제지표 및 환율)
+        # --- MACRO 시트 (경제/고용/소비) ---
         'CPIAUCSL': ['MACRO', 'Inflation', 'CPI', 1],
         'PPIACO': ['MACRO', 'Inflation', 'PPI', 1],
         'UNRATE': ['MACRO', 'Economy', '실업률', 1],
@@ -59,11 +59,12 @@ def init_split_sheets():
         'TOTLL': ['MACRO', 'Banking', '은행총대출', 1]
     }
 
-    # 데이터 수집용 딕셔너리 초기화
+    # 데이터 수집 (지표별로 쪼개기 위해 딕셔너리에 담기)
     split_data = {'ASSETS': [], 'LIQUID': [], 'MACRO': []}
 
+    print("FRED에서 역사적 데이터 수집을 시작합니다 (1970~)...")
     for ticker, info in fred_dict.items():
-        print(f"수집 중: {info[2]}...")
+        print(f"진행 중: {info[2]} ({ticker})")
         try:
             s = fred.get_series(ticker, observation_start='1970-01-01')
             group = info[0]
@@ -71,22 +72,4 @@ def init_split_sheets():
                 if pd.notna(val) and val != ".":
                     split_data[group].append([date.strftime('%Y-%m-%d'), info[1], info[2], round(float(val)/info[3], 3)])
             time.sleep(0.3)
-        except Exception as e: print(f"에러 {ticker}: {e}")
-
-    # 시트별 업로드
-    for group, sheet_id in sheets_info.items():
-        if not sheet_id: continue
-        print(f"{group} 시트 업로드 시작...")
-        target_sheet = client.open_by_key(sheet_id).sheet1
-        target_sheet.clear()
-        target_sheet.append_row(["Date", "Category", "Name", "Value"])
-        
-        group_list = sorted(split_data[group], key=lambda x: (x[0], x[2]))
-        batch_size = 3000
-        for i in range(0, len(group_list), batch_size):
-            target_sheet.append_rows(group_list[i:i+batch_size])
-            time.sleep(1)
-        print(f"✅ {group} 시트 완료!")
-
-if __name__ == "__main__":
-    init_split_sheets()
+        except Exception
