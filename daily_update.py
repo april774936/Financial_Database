@@ -1,11 +1,12 @@
 import os, json, gspread, time
-from datetime import datetime, timedelta
+import yfinance as yf
 import pandas as pd
+from datetime import datetime, timedelta
 from oauth2client.service_account import ServiceAccountCredentials
 from fredapi import Fred
 
-def daily_light_update():
-    # 1. 인증 및 API 설정
+def daily_combined_update():
+    # 1. 인증 및 환경 설정
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_json = json.loads(os.environ.get('GSPREAD_JSON'))
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
@@ -17,23 +18,28 @@ def daily_light_update():
         'LIQUID': os.environ.get('SHEET_ID_LIQUID'),
         'MACRO': os.environ.get('SHEET_ID_MACRO')
     }
+    
+    # 최근 1년치 데이터 범위 (FRED용)
+    start_date_fred = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    # 최근 10일치 데이터 범위 (yfinance 최신성 확보용)
+    start_date_yf = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
 
-    # 최근 1년치만 수집
-    start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    # 2. 지표 배분 (에러 방지 및 최신성 극대화)
+    # A. yfinance 섹션: 실시간 가격이 중요한 자산들
+    yf_targets = {
+        'QQQ': ['ASSETS', 'Index', '나스닥100'],
+        'SPY': ['ASSETS', 'Index', 'S&P500'],
+        'DIA': ['ASSETS', 'Index', '다우존스30'],
+        'BTC-USD': ['ASSETS', 'Crypto', '비트코인'],
+        'ETH-USD': ['ASSETS', 'Crypto', '이더리움'],
+        'GC=F': ['ASSETS', 'Commodity', '금_현물'],
+        'HG=F': ['ASSETS', 'Commodity', '구리_현물'],
+        'CL=F': ['ASSETS', 'Energy', 'WTI원유']
+    }
 
-   # ASSETS 그룹: 요청하신 4대 핵심 지수(나스닥, S&P500, 다우, 골드) 포함
+    # B. FRED 섹션: 경제 정책 및 매크로 지표
     fred_dict = {
-        # --- ASSETS (핵심 자산) ---
-        'NASDAQ100': ['ASSETS', 'Index', '나스닥100', 1],      # 나스닥 100
-        'SP500': ['ASSETS', 'Index', 'S&P500', 1],            # S&P 500
-        'DJIA': ['ASSETS', 'Index', '다우존스30', 1],         # 다우 존스 30
-        'GOLDPMGBD228NLBM': ['ASSETS', 'Commodity', '금_현물', 1], # 골드 (티커 수정: PM 기준)
-        'DCOILWTICO': ['ASSETS', 'Energy', 'WTI원유', 1],
-        'CBBTCUSD': ['ASSETS', 'Crypto', '비트코인', 1],
-        
-        # --- LIQUID (성공 확인됨) ---
         'WALCL': ['LIQUID', 'Liquidity', '연준총자산', 1000000],
-        'M2SL': ['LIQUID', 'Money', 'M2통화량', 1000],
         'WTREGEN': ['LIQUID', 'Liquidity', 'TGA잔고', 1],
         'RRPONTSYD': ['LIQUID', 'Liquidity', '역레포잔고', 1],
         'DFEDTARU': ['LIQUID', 'Policy', '기준금리(상단)', 1],
@@ -41,50 +47,18 @@ def daily_light_update():
         'DGS10': ['LIQUID', 'Rates', '미_10년물_금리', 1],
         'DGS2': ['LIQUID', 'Rates', '미_2년물_금리', 1],
         'VIXCLS': ['LIQUID', 'Volatility', 'VIX공포지수', 1],
-        
-        # --- MACRO (성공 확인됨) ---
+        'BAMLH0A0HYM2': ['LIQUID', 'Rates', '정크본드스프레드', 1],
+        'TOTLL': ['LIQUID', 'Economy', '은행총대출', 1],
         'CPIAUCSL': ['MACRO', 'Inflation', 'CPI', 1],
         'PPIACO': ['MACRO', 'Inflation', 'PPI', 1],
-        'UNRATE': ['MACRO', 'Economy', '실업률', 1],
-        'GDPC1': ['MACRO', 'Economy', '실질GDP', 1],
+        'UNRATE': ['MACRO', 'Labor', '실업률', 1],
         'DEXKOUS': ['MACRO', 'Currency', '원달러환율', 1],
-        'DTWEXBGS': ['MACRO', 'Currency', '달러인덱스', 1]
+        'DTWEXBGS': ['MACRO', 'Currency', '달러인덱스', 1],
+        'RSXFS': ['MACRO', 'Economy', '소매판매', 1],
+        'DGORDER': ['MACRO', 'Economy', '내구재주문', 1],
+        'TDSP': ['MACRO', 'Economy', '가계부채상환비율', 1],
+        'GDPC1': ['MACRO', 'Economy', '실질GDP', 1]
     }
 
     for group_name, sheet_id in sheets_info.items():
-        if not sheet_id:
-            print(f"경고: {group_name} 시트 ID가 설정되지 않았습니다.")
-            continue
-            
-        try:
-            print(f"--- {group_name} 업데이트 시작 ---")
-            sheet = client.open_by_key(sheet_id).sheet1
-            sheet.clear()
-            sheet.append_row(["Date", "Category", "Name", "Value"])
-            
-            new_rows = []
-            group_tickers = {k: v for k, v in fred_dict.items() if v[0] == group_name}
-            
-            for ticker, info in group_tickers.items():
-                print(f"[{group_name}] 수집 시도: {ticker} ({info[2]})")
-                try:
-                    s = fred.get_series(ticker, observation_start=start_date)
-                    if s.empty:
-                        continue
-                    for date, val in s.items():
-                        if pd.notna(val) and val != ".":
-                            new_rows.append([date.strftime('%Y-%m-%d'), info[1], info[2], round(float(val)/info[3], 3)])
-                    time.sleep(0.5)
-                except Exception as e:
-                    print(f"❌ {ticker} 수집 실패: {e}")
-                    continue
-            
-            if new_rows:
-                new_rows.sort(key=lambda x: x[0])
-                sheet.append_rows(new_rows)
-                print(f"✅ {group_name} 시트 업데이트 성공!")
-        except Exception as e:
-            print(f"🚨 {group_name} 그룹 작업 중 오류 발생: {e}")
-
-if __name__ == "__main__":
-    daily_light_update()
+        if not sheet_id: continue
