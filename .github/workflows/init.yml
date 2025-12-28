@@ -1,26 +1,31 @@
-name: Initial Data Load
+name: Initialize 3-Sheet Database
 
 on:
-  workflow_dispatch: # 이 문구가 수동 버튼을 만듭니다.
+  workflow_dispatch: # 수동 실행 버튼
 
 jobs:
-  run-init:
+  initialize-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Python Setup
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
-      - name: Install
-        run: pip install fredapi gspread oauth2client pandas yfinance
+      - name: Install dependencies
+        run: |
+          pip install pandas fredapi gspread oauth2client
 
-      - name: Run
+      - name: Run init script
         env:
-          GSPREAD_JSON: ${{ secrets.GSPREAD_JSON }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          # GitHub Secrets에서 가져올 값들
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          GSPREAD_JSON: ${{ secrets.GSPREAD_JSON }}
+          # 쪼개진 3개의 시트 ID
+          SHEET_ID_ASSETS: ${{ secrets.SHEET_ID_ASSETS }}
+          SHEET_ID_LIQUID: ${{ secrets.SHEET_ID_LIQUID }}
+          SHEET_ID_MACRO: ${{ secrets.SHEET_ID_MACRO }}
         run: python init_db.py
