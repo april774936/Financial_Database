@@ -21,15 +21,17 @@ def daily_light_update():
     # 최근 1년치만 수집
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-    # 지표 리스트 (가장 안정적인 티커로 재구성)
+   # ASSETS 그룹: 요청하신 4대 핵심 지수(나스닥, S&P500, 다우, 골드) 포함
     fred_dict = {
-        # --- ASSETS (자산) ---
-        'WILL5000IND': ['ASSETS', 'Index', '미국전체주식지수', 1],
+        # --- ASSETS (핵심 자산) ---
+        'NASDAQ100': ['ASSETS', 'Index', '나스닥100', 1],      # 나스닥 100
+        'SP500': ['ASSETS', 'Index', 'S&P500', 1],            # S&P 500
+        'DJIA': ['ASSETS', 'Index', '다우존스30', 1],         # 다우 존스 30
+        'GOLDPMGBD228NLBM': ['ASSETS', 'Commodity', '금_현물', 1], # 골드 (티커 수정: PM 기준)
         'DCOILWTICO': ['ASSETS', 'Energy', 'WTI원유', 1],
         'CBBTCUSD': ['ASSETS', 'Crypto', '비트코인', 1],
-        'GOLDAMGBD228NLBM': ['ASSETS', 'Commodity', '금_현물', 1],
         
-        # --- LIQUID (유동성/금리) ---
+        # --- LIQUID (성공 확인됨) ---
         'WALCL': ['LIQUID', 'Liquidity', '연준총자산', 1000000],
         'M2SL': ['LIQUID', 'Money', 'M2통화량', 1000],
         'WTREGEN': ['LIQUID', 'Liquidity', 'TGA잔고', 1],
@@ -40,7 +42,7 @@ def daily_light_update():
         'DGS2': ['LIQUID', 'Rates', '미_2년물_금리', 1],
         'VIXCLS': ['LIQUID', 'Volatility', 'VIX공포지수', 1],
         
-        # --- MACRO (거시경제) ---
+        # --- MACRO (성공 확인됨) ---
         'CPIAUCSL': ['MACRO', 'Inflation', 'CPI', 1],
         'PPIACO': ['MACRO', 'Inflation', 'PPI', 1],
         'UNRATE': ['MACRO', 'Economy', '실업률', 1],
