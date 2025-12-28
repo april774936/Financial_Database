@@ -1,29 +1,32 @@
-name: Daily Database Update
+name: Daily Financial Data Update
 
 on:
   schedule:
-    - cron: '40 8 * * 1-5'   # 월-금 한국시간 17:40
-    - cron: '10 14 * * 1-5'  # 월-금 한국시간 23:10
-  workflow_dispatch:          # 필요할 때 수동으로도 실행 가능
+    - cron: '0 23 * * *' # 매일 밤 11시(KST 아침 8시)에 자동 실행
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
 jobs:
-  update:
+  update-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
-      - name: Install
-        run: pip install fredapi gspread oauth2client pandas yfinance
+      - name: Install dependencies
+        run: |
+          pip install pandas fredapi gspread oauth2client
 
-      - name: Run Update
+      - name: Run update script
         env:
-          GSPREAD_JSON: ${{ secrets.GSPREAD_JSON }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-        run: python update_db.py
+          GSPREAD_JSON: ${{ secrets.GSPREAD_JSON }}
+          # 3개로 나뉜 시트 ID들을 모두 불러옵니다
+          SHEET_ID_ASSETS: ${{ secrets.SHEET_ID_ASSETS }}
+          SHEET_ID_LIQUID: ${{ secrets.SHEET_ID_LIQUID }}
+          SHEET_ID_MACRO: ${{ secrets.SHEET_ID_MACRO }}
+        run: python daily_update.py
