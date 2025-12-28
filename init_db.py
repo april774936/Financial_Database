@@ -16,8 +16,7 @@ def init_sheet():
     all_data = []
     start_date = '1970-01-01'
 
-    # 1. FRED 지표 (역사적 매크로)
-    # [카테고리, 이름, 단위변환]
+    # 1. FRED 지표
     fred_dict = {
         'WALCL': ['Liquidity', '연준총자산', 1000000], 
         'M2SL': ['Money', 'M2통화량', 1000],
@@ -48,10 +47,10 @@ def init_sheet():
             for date, val in s.items():
                 if pd.notna(val):
                     all_data.append([date.strftime('%Y-%m-%d'), info[0], info[1], round(val/info[2], 3)])
-            time.sleep(0.5)
+            time.sleep(0.4)
         except Exception as e: print(f"FRED 에러 ({info[1]}): {e}")
 
-    # 2. Yahoo Finance 지표 (시장 가격 & 공포지수 & 유가 & 환율)
+    # 2. Yahoo Finance 지표
     yf_dict = {
         '^NDX': ['Index', '나스닥100'], 
         '^GSPC': ['Index', 'S&P500'],
@@ -72,12 +71,33 @@ def init_sheet():
     for ticker, info in yf_dict.items():
         print(f"YFinance 수집 중: {info[1]}...")
         try:
+            # 주가 데이터 수집
             df = yf.download(ticker, start=start_date, progress=False)
             if not df.empty:
-                # yfinance 라이브러리 버전에 따라 Close 추출 방식 대응
+                # 데이터가 1차원 Series로 올 수 있도록 처리
                 close_data = df['Close']
                 for date, val in close_data.items():
                     if pd.notna(val):
-                        # val이 Series인 경우 첫 번째 값 사용 (간혹 발생하는 멀티인덱스 대응)
+                        # 멀티인덱스나 Series 대응
                         v = float(val.iloc[0]) if hasattr(val, 'iloc') else float(val)
-                        all_data.append([date.strftime('%Y-%m-%d'), info[0], info[1], round(v
+                        all_data.append([date.strftime('%Y-%m-%d'), info[0], info[1], round(v, 2)])
+        except Exception as e: print(f"YFinance 에러 ({info[1]}): {e}")
+
+    # 3. 데이터 정렬
+    all_data.sort(key=lambda x: (x[0], x[2]))
+
+    # 4. 시트 초기화 및 업로드
+    print(f"시트 초기화... 총 {len(all_data)}행 업로드 시작")
+    sheet.clear()
+    sheet.append_row(["Date", "Category", "Name", "Value"])
+    
+    batch_size = 2000
+    for i in range(0, len(all_data), batch_size):
+        sheet.append_rows(all_data[i:i+batch_size])
+        print(f"{i} / {len(all_data)} 행 완료...")
+        time.sleep(1)
+    
+    print(f"✅ 역사적 데이터베이스 구축 완료!")
+
+if __name__ == "__main__":
+    init_sheet()
