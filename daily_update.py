@@ -23,7 +23,7 @@ def daily_ultimate_update():
         'MACRO': os.environ.get('SHEET_ID_MACRO')
     }
 
-    # 데이터 누락 방지를 위해 2년치 조회
+    # 데이터 누락 방지를 위해 2년치(730일) 조회
     start_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
     today_str = datetime.now().strftime('%Y-%m-%d')
 
@@ -40,7 +40,7 @@ def daily_ultimate_update():
     
     valuation_tickers = {'SPY': 'S&P500', 'QQQ': '나스닥100'}
 
-    # B. FRED 타겟 (M2, 리스크 지표 등) - 구문 오류 완벽 수정
+    # B. FRED 타겟 (M2, 리스크 지표 등) - 문법 오류 완벽 수정
     fred_map = {
         'WM2NS': ['LIQUID', 'Liquidity', 'M2통화량', 1],
         'WALCL': ['LIQUID', 'Liquidity', '연준총자산', 1000000],
@@ -66,27 +66,32 @@ def daily_ultimate_update():
             sheet = doc.sheet1
             new_rows = []
 
-            # --- yfinance 수집 ---
+            # --- 1. 가격 데이터 (yfinance) ---
             group_yf = {k: v for k, v in yf_map.items() if v[0] == group_name}
             for ticker, info in group_yf.items():
+                print(f"{info[2]} 가격 수집 중...")
                 df = yf.download(ticker, start=start_date, progress=False)
                 if not df.empty:
+                    # 최신 yfinance 버전의 MultiIndex 대응
                     close_series = df['Close'][ticker] if isinstance(df['Close'], pd.DataFrame) else df['Close']
                     for date, val in close_series.tail(400).items():
-                        new_rows.append([date.strftime('%Y-%m-%d'), info[1], info[2], round(float(val), 2)])
+                        if pd.notna(val):
+                            new_rows.append([date.strftime('%Y-%m-%d'), info[1], info[2], round(float(val), 2)])
 
-            # --- 밸류에이션 수집 (LIQUID 전용) ---
+            # --- 2. 밸류에이션 데이터 (LIQUID 전용) ---
             if group_name == 'LIQUID':
                 for t_code, t_name in valuation_tickers.items():
+                    print(f"{t_name} 밸류에이션 수집 중...")
                     t_obj = yf.Ticker(t_code)
                     pe = t_obj.info.get('trailingPE')
                     eps = t_obj.info.get('trailingEps')
                     if pe: new_rows.append([today_str, 'Valuation', f'{t_name}_PE', round(float(pe), 2)])
                     if eps: new_rows.append([today_str, 'Valuation', f'{t_name}_EPS', round(float(eps), 2)])
 
-            # --- FRED 수집 ---
+            # --- 3. 매크로 데이터 (FRED) ---
             group_fred = {k: v for k, v in fred_map.items() if v[0] == group_name}
             for ticker, info in group_fred.items():
+                print(f"{info[2]} 지표 수집 중...")
                 try:
                     s = fred.get_series(ticker, observation_start=start_date)
                     for date, val in s.items():
@@ -94,7 +99,7 @@ def daily_ultimate_update():
                             new_rows.append([date.strftime('%Y-%m-%d'), info[1], info[2], round(float(val)/info[3], 3)])
                 except: continue
 
-            # --- 데이터 업로드 ---
+            # --- 4. 시트 업데이트 ---
             if new_rows:
                 final_df = pd.DataFrame(new_rows, columns=["Date", "Category", "Name", "Value"])
                 final_df = final_df.drop_duplicates(subset=["Date", "Name"], keep='last')
