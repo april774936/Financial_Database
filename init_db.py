@@ -18,7 +18,7 @@ def init_split_sheets():
         'MACRO': os.environ.get('SHEET_ID_MACRO')
     }
 
-    # [중요] 전체 지표 분류 정의
+    # 지표 분류 정의
     fred_dict = {
         # --- ASSETS 시트 (자산/지수/원자재) ---
         'NASDAQ100': ['ASSETS', 'Index', '나스닥100', 1],
@@ -59,10 +59,9 @@ def init_split_sheets():
         'TOTLL': ['MACRO', 'Banking', '은행총대출', 1]
     }
 
-    # 데이터 수집 (지표별로 쪼개기 위해 딕셔너리에 담기)
     split_data = {'ASSETS': [], 'LIQUID': [], 'MACRO': []}
 
-    print("FRED에서 역사적 데이터 수집을 시작합니다 (1970~)...")
+    print("FRED 데이터 수집 시작...")
     for ticker, info in fred_dict.items():
         print(f"진행 중: {info[2]} ({ticker})")
         try:
@@ -72,4 +71,31 @@ def init_split_sheets():
                 if pd.notna(val) and val != ".":
                     split_data[group].append([date.strftime('%Y-%m-%d'), info[1], info[2], round(float(val)/info[3], 3)])
             time.sleep(0.3)
-        except Exception
+        except Exception as e:
+            print(f"에러 ({info[2]}): {e}")
+
+    # 3개의 시트에 각각 데이터 업로드
+    for group, sheet_id in sheets_info.items():
+        if not sheet_id:
+            print(f"경고: {group} 시트 ID가 설정되지 않았습니다.")
+            continue
+        
+        print(f"--- {group} 시트 업로드 시작 ---")
+        try:
+            target_sheet = client.open_by_key(sheet_id).sheet1
+            target_sheet.clear()
+            target_sheet.append_row(["Date", "Category", "Name", "Value"])
+            
+            group_list = sorted(split_data[group], key=lambda x: (x[0], x[2]))
+            
+            batch_size = 3000
+            for i in range(0, len(group_list), batch_size):
+                target_sheet.append_rows(group_list[i:i+batch_size])
+                print(f"{group}: {i}행 업로드 중...")
+                time.sleep(1)
+            print(f"✅ {group} 시트 완료!")
+        except Exception as e:
+            print(f"❌ {group} 시트 업로드 실패: {e}")
+
+if __name__ == "__main__":
+    init_split_sheets()
