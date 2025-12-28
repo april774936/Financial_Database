@@ -1,0 +1,33 @@
+name: FINAL_SUCCESS_UPDATE
+
+on:
+  schedule:
+    - cron: '0 21 * * *' # 한국 시간 매일 오전 6시
+  workflow_dispatch:      # 수동 실행 버튼
+
+jobs:
+  update_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. 코드 체크아웃
+        uses: actions/checkout@v3
+
+      - name: 2. 파이썬 환경 설정
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 3. 필수 라이브러리 강제 설치
+        # requirements.txt 없이 여기서 직접 설치하도록 명령을 박았습니다.
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas gspread oauth2client fredapi
+
+      - name: 4. 스크립트 실행
+        env:
+          GSPREAD_JSON: ${{ secrets.GSPREAD_JSON }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          SHEET_ID_ASSETS: ${{ secrets.SHEET_ID_ASSETS }}
+          SHEET_ID_LIQUID: ${{ secrets.SHEET_ID_LIQUID }}
+          SHEET_ID_MACRO: ${{ secrets.SHEET_ID_MACRO }}
+        run: python daily_update.py
