@@ -1,0 +1,26 @@
+name: Initial Data Load
+
+on:
+  workflow_dispatch: # 이 문구가 수동 버튼을 만듭니다.
+
+jobs:
+  run-init:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Python Setup
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install
+        run: pip install fredapi gspread oauth2client pandas yfinance
+
+      - name: Run
+        env:
+          GSPREAD_JSON: ${{ secrets.GSPREAD_JSON }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python init_db.py
