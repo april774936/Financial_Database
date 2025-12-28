@@ -22,14 +22,15 @@ def daily_light_update():
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
 
     # 지표 리스트 (실패 가능성이 있는 원자재 티커들을 안정적인 것으로 교체)
+# ASSETS 그룹을 가장 안정적인 지표로 재구성
     fred_dict = {
-        'NASDAQ100': ['ASSETS', 'Index', '나스닥100', 1],
-        'SP500': ['ASSETS', 'Index', 'S&P500', 1],
-        'DJIA': ['ASSETS', 'Index', '다우존스', 1],
+        # --- ASSETS (검증된 티커 위주) ---
+        'WILL5000IND': ['ASSETS', 'Index', '미국전체주식지수', 1], # NASDAQ/SP500 대용 (가장 안정적)
         'DCOILWTICO': ['ASSETS', 'Energy', 'WTI원유', 1],
         'CBBTCUSD': ['ASSETS', 'Crypto', '비트코인', 1],
-        'CBETHUSD': ['ASSETS', 'Crypto', '이더리움', 1],
         'GOLDAMGBD228NLBM': ['ASSETS', 'Commodity', '금_현물', 1],
+        
+        # --- LIQUID (성공 확인됨) ---
         'WALCL': ['LIQUID', 'Liquidity', '연준총자산', 1000000],
         'M2SL': ['LIQUID', 'Money', 'M2통화량', 1000],
         'WTREGEN': ['LIQUID', 'Liquidity', 'TGA잔고', 1],
@@ -39,12 +40,15 @@ def daily_light_update():
         'DGS10': ['LIQUID', 'Rates', '미_10년물_금리', 1],
         'DGS2': ['LIQUID', 'Rates', '미_2년물_금리', 1],
         'VIXCLS': ['LIQUID', 'Volatility', 'VIX공포지수', 1],
+        
+        # --- MACRO (성공 확인됨) ---
         'CPIAUCSL': ['MACRO', 'Inflation', 'CPI', 1],
         'PPIACO': ['MACRO', 'Inflation', 'PPI', 1],
         'UNRATE': ['MACRO', 'Economy', '실업률', 1],
         'GDPC1': ['MACRO', 'Economy', '실질GDP', 1],
         'DEXKOUS': ['MACRO', 'Currency', '원달러환율', 1],
         'DTWEXBGS': ['MACRO', 'Currency', '달러인덱스', 1]
+    }
     }
 
     for group_name, sheet_id in sheets_info.items():
